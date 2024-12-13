@@ -5,17 +5,7 @@ import time
 import torch
 from feature_extraction import load_model_and_processor, extract_features
 from inference import load_ompal_model
-import os
-import subprocess
-
-try:
-    import sounddevice as sd
-except OSError:
-    print("Installing PortAudio...")
-    subprocess.run(["apt-get", "update"], check=True)
-    subprocess.run(["apt-get", "install", "-y", "portaudio19-dev"], check=True)
-    import sounddevice as sd
-
+import sounddevice as sd
 # Title
 st.title("OMPAL - Inference API")
 
