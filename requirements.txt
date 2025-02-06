@@ -1,0 +1,9 @@
+matplotlib
+numpy
+pypinyin
+sounddevice
+streamlit
+streamlit_webrtc
+torch
+torchaudio
+transformers
