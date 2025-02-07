@@ -37,7 +37,7 @@ selected = option_menu(
 
 # Home Page
 if selected == "Home":
-    st.subheader("線上華語發音評分系統\nOnline Mandarin Pronunciation Scoring System")
+    st.subheader("線上華語發音評分系統（維護中請勿使用）\nOnline Mandarin Pronunciation Scoring System")
 
     # Initialize session states
     if 'text_submitted' not in st.session_state:
