@@ -10,7 +10,6 @@ from pydub import AudioSegment
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import av  # Audio/Video processing
 import io
-import queue
 
 # Center the title and subtitle using HTML
 st.markdown(
@@ -162,7 +161,37 @@ if selected == "Home":
             st.session_state['audio_file'] = "recorded_audio.wav"
             st.audio(audio_bytes, format="audio/wav")
             st.success("Recording saved!")
-  
+        '''if 'recording_started' not in st.session_state:
+            st.session_state['recording_started'] = False
+        if 'start_time' not in st.session_state:
+            st.session_state['start_time'] = None
+        if 'audio_data' not in st.session_state:
+            st.session_state['audio_data'] = None
+
+        col1, col2 = st.columns(2)
+
+        if not st.session_state['recording_started']:
+            if col1.button("Start Recording"):
+                st.session_state['recording_started'] = True
+                st.session_state['start_time'] = time.time()
+                st.write("Recording... Speak now.")
+                st.session_state['audio_data'] = sd.rec(int(10 * 44100), samplerate=44100, channels=1)
+                if col2.button("Stop Recording"):
+                    sd.stop()
+        else:
+            if col2.button("Stop Recording"):
+                sd.stop()
+                st.session_state['recording_started'] = False
+
+                # Wait for recording to fully stop
+                time.sleep(0.1)
+
+                duration = min(time.time() - st.session_state['start_time'], 10)
+                st.session_state['audio_duration'] = duration
+                st.session_state['audio_file'] = save_audio(st.session_state['audio_data'], duration)
+                st.success("Recording saved.")
+                st.audio("recorded_audio.wav", format="audio/wav")'''
+
     # Upload Audio
     elif input_method == "Upload Audio":
         uploaded_audio = st.file_uploader("Upload a recorded audio:", type=["wav"])
