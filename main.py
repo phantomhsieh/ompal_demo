@@ -6,6 +6,10 @@ from streamlit_option_menu import option_menu
 import time
 import sounddevice as sd  # Ensure you have this module installed
 import requests 
+from pydub import AudioSegment
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings
+import av  # Audio/Video processing
+import io
 
 # Center the title and subtitle using HTML
 st.markdown(
@@ -49,6 +53,41 @@ def send_audio_to_api(audio_file_path):
         else:
             st.error(f"Error: {response.status_code} - {response.text}")
             st.error("Failed to upload audio to API.")
+
+# Audio Recording Component
+def audio_recorder():
+    webrtc_ctx = webrtc_streamer(
+        key="audio-recorder",
+        mode=WebRtcMode.SENDONLY,
+        audio_receiver_size=1024,
+        client_settings=ClientSettings(
+            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+            media_stream_constraints={"audio": True, "video": False},
+        ),
+    )
+
+    if webrtc_ctx.audio_receiver:
+        st.info("Recording... Speak now!")
+        audio_frames = []
+        
+        # Collect audio chunks
+        for frame in webrtc_ctx.audio_receiver.get_frames(timeout=10):
+            audio_frames.append(frame.to_ndarray())
+        
+        if audio_frames:
+            # Convert to playable audio
+            audio_data = np.concatenate(audio_frames)
+            audio_bytes = io.BytesIO()
+            AudioSegment(
+                audio_data.tobytes(),
+                frame_rate=44100,
+                sample_width=audio_data.dtype.itemsize,
+                channels=1
+            ).export(audio_bytes, format="wav")
+            
+            st.audio(audio_bytes, format="audio/wav")
+            return audio_bytes.getvalue()
+    return None
 
 def save_audio(audio_data, duration, filename="recorded_audio.wav", fs=44100):
     """Save the recorded audio to a .wav file with precise duration handling."""
@@ -108,7 +147,15 @@ if selected == "Home":
 
     # Record Audio
     if input_method == "Record Audio":
-        if 'recording_started' not in st.session_state:
+        audio_bytes = audio_recorder()
+        if audio_bytes:
+            # Save to file
+            with open("recorded_audio.wav", "wb") as f:
+                f.write(audio_bytes)
+            
+            st.session_state['audio_file'] = "recorded_audio.wav"
+            st.success("Recording saved!")
+        '''if 'recording_started' not in st.session_state:
             st.session_state['recording_started'] = False
         if 'start_time' not in st.session_state:
             st.session_state['start_time'] = None
@@ -132,12 +179,12 @@ if selected == "Home":
 
                 # Wait for recording to fully stop
                 time.sleep(0.1)
-                
+
                 duration = min(time.time() - st.session_state['start_time'], 10)
                 st.session_state['audio_duration'] = duration
                 st.session_state['audio_file'] = save_audio(st.session_state['audio_data'], duration)
                 st.success("Recording saved.")
-                st.audio("recorded_audio.wav", format="audio/wav")
+                st.audio("recorded_audio.wav", format="audio/wav")'''
 
     # Upload Audio
     elif input_method == "Upload Audio":

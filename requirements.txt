@@ -4,3 +4,4 @@ sounddevice
 streamlit
 streamlit_webrtc
 streamlit-option-menu
+pydub 
