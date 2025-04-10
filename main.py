@@ -43,6 +43,8 @@ def send_audio_to_api(audio_file_path):
         if response.status_code == 200:
             result = response.json()
             #st.success(f"Audio duration from API: {result['duration_seconds']} seconds.")
+            # Delete the audio file after processing
+            os.remove(audio_file_path)
             return result
         else:
             st.error(f"Error: {response.status_code} - {response.text}")
