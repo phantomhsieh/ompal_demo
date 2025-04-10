@@ -7,7 +7,7 @@ import time
 import sounddevice as sd  # Ensure you have this module installed
 import requests 
 from pydub import AudioSegment
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import av  # Audio/Video processing
 import io
 
