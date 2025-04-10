@@ -7,10 +7,29 @@ import time
 import sounddevice as sd  # Ensure you have this module installed
 import requests 
 from pydub import AudioSegment
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av  # Audio/Video processing
 import io
 import queue
+import asyncio
+
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+# 3. ASYNCIO WORKAROUND (ADD THIS BLOCK RIGHT HERE)
+import asyncio
+import nest_asyncio
+
+def fix_asyncio_event_loop():
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    nest_asyncio.apply(loop)
+
+fix_asyncio_event_loop()  # Call it immediately
 
 # Center the title and subtitle using HTML
 st.markdown(
@@ -62,9 +81,8 @@ def audio_recorder():
         key="audio-recorder",
         mode=WebRtcMode.SENDONLY,
         audio_receiver_size=1024,
-        rtc_configuration={  # Replaces ClientSettings
-            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-        },
+        rtc_configuration=RTC_CONFIGURATION,
+        async_processing=True,
         media_stream_constraints={
             "audio": True,
             "video": False
