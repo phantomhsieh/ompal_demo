@@ -1,10 +1,6 @@
-matplotlib
 numpy
 pypinyin
 sounddevice
 streamlit
 streamlit_webrtc
 streamlit-option-menu
-torch
-torchaudio
-transformers

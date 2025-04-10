@@ -1,13 +1,11 @@
 import streamlit as st
 import numpy as np
 import wave
-import torch
 import os
-from feature_extraction import load_model_and_processor, extract_features
-from inference import load_ompal_model
 from streamlit_option_menu import option_menu
 import time
 import sounddevice as sd  # Ensure you have this module installed
+import requests 
 
 # Center the title and subtitle using HTML
 st.markdown(
@@ -35,9 +33,25 @@ selected = option_menu(
     orientation="vertical",  # Menu orientation
 )
 
+# Send audio to API
+def send_audio_to_api(audio_file_path):
+    api_endpoint = "http://140.112.41.120:8000/upload-audio/"  # 確保這是正確的 API 端點
+    headers = {"access_token": "your-secret-api-key"}  # 添加 API 密鑰到請求頭
+    with open(audio_file_path, "rb") as audio_file:
+        files = {"file": audio_file}
+        response = requests.post(api_endpoint, files=files, headers=headers)
+        if response.status_code == 200:
+            result = response.json()
+            #st.success(f"Audio duration from API: {result['duration_seconds']} seconds.")
+            return result
+        else:
+            st.error(f"Error: {response.status_code} - {response.text}")
+            st.error("Failed to upload audio to API.")
+
+
 # Home Page
 if selected == "Home":
-    st.subheader("線上華語發音評分系統（維護中請勿使用）\nOnline Mandarin Pronunciation Scoring System")
+    st.subheader("線上華語發音評分系統\nOnline Mandarin Pronunciation Scoring System")
 
     # Initialize session states
     if 'text_submitted' not in st.session_state:
@@ -112,11 +126,12 @@ if selected == "Home":
             except Exception as e:
                 st.error(f"Error processing file: {e}")
 
+
     # Text Input
-    st.subheader("Enter Text")
+    st.subheader("Enter Transcript")
     if not st.session_state['text_submitted']:
-        text_input = st.text_area("Type your Chinese text here:", "")
-        if st.button("Submit Text"):
+        text_input = st.text_area("Please provide the transcript (the Chinese text matching the audio recording) here:", "")
+        if st.button("Submit and run evaluation"):
             if text_input.strip():
                 st.session_state['text_submitted'] = True
                 st.session_state['submitted_text'] = text_input.strip()
@@ -128,8 +143,16 @@ if selected == "Home":
 
     # Inference Section (Currently Under Maintenance)
     if st.session_state['audio_file'] and st.session_state['submitted_text']:
-        st.subheader("Model Evaluation (Under Maintenance)")
-        st.info("This feature is currently under maintenance. Please check back later.")
+        st.subheader("Model Evaluation")
+        with st.spinner("Processing..."):
+            result = send_audio_to_api(st.session_state['audio_file'])
+        
+        if result:
+            # Display the results
+            st.success(f"Accuracy: {result['results']['accuracy']:.2f}, Fluency: {result['results']['fluency']:.2f}, Prosody: {result['results']['prosody']:.2f}")
+            # Display the message
+            st.success("You can refresh the page to re-evaluate.")
+            
 
     # Footer Information
     st.markdown("---")
