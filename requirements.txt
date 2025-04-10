@@ -5,3 +5,5 @@ streamlit
 streamlit_webrtc
 streamlit-option-menu
 pydub 
+nest-asyncio>=1.5.6
+aioice>=0.9.0
