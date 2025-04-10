@@ -56,26 +56,32 @@ def send_audio_to_api(audio_file_path):
 
 # Audio Recording Component
 def audio_recorder():
+    """Browser-based audio recorder using WebRTC"""
     webrtc_ctx = webrtc_streamer(
         key="audio-recorder",
         mode=WebRtcMode.SENDONLY,
         audio_receiver_size=1024,
-        client_settings=ClientSettings(
-            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-            media_stream_constraints={"audio": True, "video": False},
-        ),
+        rtc_configuration={  # Replaces ClientSettings
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+        },
+        media_stream_constraints={
+            "audio": True,
+            "video": False
+        },
     )
 
     if webrtc_ctx.audio_receiver:
         st.info("Recording... Speak now!")
         audio_frames = []
         
-        # Collect audio chunks
-        for frame in webrtc_ctx.audio_receiver.get_frames(timeout=10):
-            audio_frames.append(frame.to_ndarray())
+        try:
+            while True:
+                frame = webrtc_ctx.audio_receiver.get_frame(timeout=5)
+                audio_frames.append(frame.to_ndarray())
+        except queue.Empty:
+            pass  # Timeout means recording stopped
         
         if audio_frames:
-            # Convert to playable audio
             audio_data = np.concatenate(audio_frames)
             audio_bytes = io.BytesIO()
             AudioSegment(
@@ -85,7 +91,6 @@ def audio_recorder():
                 channels=1
             ).export(audio_bytes, format="wav")
             
-            st.audio(audio_bytes, format="audio/wav")
             return audio_bytes.getvalue()
     return None
 
@@ -154,6 +159,7 @@ if selected == "Home":
                 f.write(audio_bytes)
             
             st.session_state['audio_file'] = "recorded_audio.wav"
+            st.audio(audio_bytes, format="audio/wav")
             st.success("Recording saved!")
         '''if 'recording_started' not in st.session_state:
             st.session_state['recording_started'] = False
