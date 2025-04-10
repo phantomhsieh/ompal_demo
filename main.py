@@ -50,6 +50,41 @@ def send_audio_to_api(audio_file_path):
             st.error(f"Error: {response.status_code} - {response.text}")
             st.error("Failed to upload audio to API.")
 
+def save_audio(audio_data, duration, filename="recorded_audio.wav", fs=44100):
+    """Save the recorded audio to a .wav file with precise duration handling."""
+    try:
+        # Get actual recorded samples (not just the buffer size)
+        actual_samples = int(fs * duration)
+        cropped_audio = audio_data[:actual_samples, 0]  # Take first channel if stereo
+        
+        # Remove DC offset and normalize
+        cropped_audio = cropped_audio - np.mean(cropped_audio)
+        max_val = np.max(np.abs(cropped_audio))
+        if max_val > 0:
+            cropped_audio = cropped_audio / max_val
+        
+        # Apply fade-out to prevent clicks
+        fade_samples = min(512, actual_samples)  # 512 samples (~12ms at 44100Hz)
+        if fade_samples > 0:
+            fade_window = np.linspace(1.0, 0.0, fade_samples)
+            cropped_audio[-fade_samples:] *= fade_window
+        
+        # Convert to 16-bit PCM
+        int_audio = (cropped_audio * 32767).astype(np.int16)
+        
+        # Save to WAV file
+        with wave.open(filename, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(fs)
+            wf.writeframes(int_audio.tobytes())
+        
+        return filename
+        
+    except Exception as e:
+        st.error(f"Error saving audio: {str(e)}")
+        return None
+
 
 # Home Page
 if selected == "Home":
@@ -60,8 +95,6 @@ if selected == "Home":
         st.session_state['text_submitted'] = False
     if 'submitted_text' not in st.session_state:
         st.session_state['submitted_text'] = ""
-    if 'audio_option' not in st.session_state:
-        st.session_state['audio_option'] = None
     if 'audio_duration' not in st.session_state:
         st.session_state['audio_duration'] = None
     if 'audio_file' not in st.session_state:
@@ -69,26 +102,12 @@ if selected == "Home":
 
     # Audio Input Options
     st.subheader("Audio Input")
-    if st.session_state['audio_option'] is None:
-        st.write("Choose how to provide audio input:")
-        if st.button("Record Audio"):
-            st.session_state['audio_option'] = "record"
-        elif st.button("Upload Audio"):
-            st.session_state['audio_option'] = "upload"
+    input_method = st.radio("Select input method:", 
+                          ("Record Audio", "Upload Audio"),
+                          index=1)
 
     # Record Audio
-    if st.session_state['audio_option'] == "record":
-        def save_audio(audio_data, duration, filename="recorded_audio.wav", fs=44100):
-            """Save the recorded audio to a .wav file."""
-            samples = int(fs * duration)
-            cropped_audio = audio_data[:samples]
-            with wave.open(filename, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)  # 16-bit audio
-                wf.setframerate(fs)
-                wf.writeframes((cropped_audio * 32767).astype(np.int16).tobytes())
-            st.session_state['audio_file'] = filename
-
+    if input_method == "Record Audio":
         if 'recording_started' not in st.session_state:
             st.session_state['recording_started'] = False
         if 'start_time' not in st.session_state:
@@ -104,18 +123,25 @@ if selected == "Home":
                 st.session_state['start_time'] = time.time()
                 st.write("Recording... Speak now.")
                 st.session_state['audio_data'] = sd.rec(int(10 * 44100), samplerate=44100, channels=1)
+                if col2.button("Stop Recording"):
+                    sd.stop()
+        else:
             if col2.button("Stop Recording"):
                 sd.stop()
                 st.session_state['recording_started'] = False
+
+                # Wait for recording to fully stop
+                time.sleep(0.1)
+                
                 duration = min(time.time() - st.session_state['start_time'], 10)
                 st.session_state['audio_duration'] = duration
-                save_audio(st.session_state['audio_data'], duration)
+                st.session_state['audio_file'] = save_audio(st.session_state['audio_data'], duration)
                 st.success("Recording saved.")
                 st.audio("recorded_audio.wav", format="audio/wav")
 
     # Upload Audio
-    elif st.session_state['audio_option'] == "upload":
-        uploaded_audio = st.file_uploader("Upload a recorded audio (optional):", type=["wav"])
+    elif input_method == "Upload Audio":
+        uploaded_audio = st.file_uploader("Upload a recorded audio:", type=["wav"])
         if uploaded_audio:
             try:
                 with open("uploaded_audio.wav", "wb") as f:
@@ -143,7 +169,7 @@ if selected == "Home":
     else:
         st.write(f"Submitted Text: {st.session_state['submitted_text']}")
 
-    # Inference Section (Currently Under Maintenance)
+    # Inference Section
     if st.session_state['audio_file'] and st.session_state['submitted_text']:
         st.subheader("Model Evaluation")
         with st.spinner("Processing..."):
@@ -153,8 +179,8 @@ if selected == "Home":
             # Display the results
             st.success(f"Accuracy: {result['results']['accuracy']:.2f}, Fluency: {result['results']['fluency']:.2f}, Prosody: {result['results']['prosody']:.2f}")
             # Display the message
-            st.success("You can refresh the page to re-evaluate.")
-            
+            st.success("You can refresh the page (F5) to re-evaluate.")
+
 
     # Footer Information
     st.markdown("---")
@@ -164,8 +190,8 @@ if selected == "Home":
 
     音檔為法國國立東方語文學院漢學系學生之錄音，感謝劉展岳和劉芸菁協助收集音檔。
 
-    計畫主持人：劉德馨  
-    協同研究人員：謝文崴  
+    計畫主持人：劉德馨  \n
+    協同研究人員：謝文崴 r11942078@ntu.edu.tw \n
     計畫助理：廖芳婷、李沛欣、楊元嘉
     """)
 
