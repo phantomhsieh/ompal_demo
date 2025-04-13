@@ -76,41 +76,96 @@ def send_audio_to_api(audio_file_path):
 
 # Audio Recording Component
 def audio_recorder():
-    """Browser-based audio recorder using WebRTC"""
+    """Browser-based audio recorder using WebRTC with improved reliability"""
+    # Initialize session state for recording control
+    if 'recording_in_progress' not in st.session_state:
+        st.session_state.recording_in_progress = False
+    if 'recording_complete' not in st.session_state:
+        st.session_state.recording_complete = False
+
     webrtc_ctx = webrtc_streamer(
         key="audio-recorder",
         mode=WebRtcMode.SENDONLY,
-        audio_receiver_size=1024,
+        audio_receiver_size=2048,  # Increased buffer size
         rtc_configuration=RTC_CONFIGURATION,
         async_processing=True,
         media_stream_constraints={
-            "audio": True,
+            "audio": {
+                "sampleRate": 44100,  # Explicit sample rate
+                "channelCount": 1,     # Mono audio
+                "echoCancellation": True,
+                "noiseSuppression": True,
+                "autoGainControl": True
+            },
             "video": False
         },
     )
 
-    if webrtc_ctx.audio_receiver:
-        st.info("Recording... Speak now!")
+    if webrtc_ctx.audio_receiver and not st.session_state.recording_complete:
+        st.session_state.recording_in_progress = True
+        status_text = st.empty()
+        status_text.info("Recording... Speak now!")
+        
         audio_frames = []
+        silent_frames = 0
+        max_silent_frames = 10  # Allow some silence before stopping
         
         try:
-            while True:
-                frame = webrtc_ctx.audio_receiver.get_frame(timeout=5)
-                audio_frames.append(frame.to_ndarray())
+            while st.session_state.recording_in_progress:
+                frame = webrtc_ctx.audio_receiver.get_frame(timeout=2)  # Shorter timeout
+                frame_data = frame.to_ndarray()
+                
+                # Validate audio frame
+                if frame_data.size > 0:
+                    rms = np.sqrt(np.mean(frame_data**2))  # Calculate RMS volume
+                    if rms > 0.01:  # Threshold for non-silent audio
+                        audio_frames.append(frame_data)
+                        silent_frames = 0
+                    else:
+                        silent_frames += 1
+                        
+                    # Stop if too many silent frames
+                    if silent_frames >= max_silent_frames:
+                        st.warning("Stopping recording due to silence")
+                        break
         except queue.Empty:
-            pass  # Timeout means recording stopped
+            st.warning("Recording timed out")
+        except Exception as e:
+            st.error(f"Recording error: {str(e)}")
+            return None
+        
+        st.session_state.recording_in_progress = False
+        st.session_state.recording_complete = True
         
         if audio_frames:
-            audio_data = np.concatenate(audio_frames)
-            audio_bytes = io.BytesIO()
-            AudioSegment(
-                audio_data.tobytes(),
-                frame_rate=44100,
-                sample_width=audio_data.dtype.itemsize,
-                channels=1
-            ).export(audio_bytes, format="wav")
-            
-            return audio_bytes.getvalue()
+            status_text.success("Recording complete! Processing...")
+            try:
+                audio_data = np.concatenate(audio_frames)
+                
+                # Create audio segment with correct parameters
+                audio_segment = AudioSegment(
+                    audio_data.tobytes(),
+                    frame_rate=44100,
+                    sample_width=audio_data.dtype.itemsize,
+                    channels=1
+                )
+                
+                # Normalize volume
+                audio_segment = audio_segment.normalize()
+                
+                # Export to WAV
+                audio_bytes = io.BytesIO()
+                audio_segment.export(audio_bytes, format="wav")
+                
+                status_text.empty()
+                return audio_bytes.getvalue()
+            except Exception as e:
+                st.error(f"Audio processing error: {str(e)}")
+                return None
+        else:
+            status_text.error("No valid audio recorded")
+            return None
+    
     return None
 
 def save_audio(audio_data, duration, filename="recorded_audio.wav", fs=44100):
@@ -148,6 +203,36 @@ def save_audio(audio_data, duration, filename="recorded_audio.wav", fs=44100):
         st.error(f"Error saving audio: {str(e)}")
         return None
 
+def clamp_and_feedback(result):
+    # Clamp scores between 0 and 5
+    clamped_scores = {
+        'accuracy': max(0, min(5, result['results']['accuracy'])),
+        'fluency': max(0, min(5, result['results']['fluency'])),
+        'prosody': max(0, min(5, result['results']['prosody']))
+    }
+    
+    # Calculate average score
+    avg_score = (clamped_scores['accuracy'] + clamped_scores['fluency'] + clamped_scores['prosody']) / 3
+    
+    # Determine feedback based on average score (all under 10 words)
+    if avg_score < 3:
+        feedback = "Needs significant improvement. Keep practicing!"
+    elif 3 <= avg_score < 4:
+        feedback = "Good effort! Some areas need refinement."
+    elif 4 <= avg_score < 4.5:
+        feedback = "Great job! You're close to excellent."
+    else:  # 4.5-5
+        feedback = "Excellent performance! Nearly flawless."
+    
+    # Display the results with feedback
+    st.success(
+        f"Accuracy: {clamped_scores['accuracy']:.2f}, "
+        f"Fluency: {clamped_scores['fluency']:.2f}, "
+        f"Prosody: {clamped_scores['prosody']:.2f}\n"
+        "(The rating scale is from 0 to 5.)"   
+    )
+    st.success(f"Feedback: {feedback}")
+    st.success("You can refresh the page (F5) to re-evaluate.")
 
 # Home Page
 if selected == "Home":
@@ -171,18 +256,25 @@ if selected == "Home":
 
     # Record Audio
     if input_method == "Record Audio":
-        audio_bytes = audio_recorder()
-        if audio_bytes:
+        st.text("Maximum audio length: ~1 sentence (under 15 sec).")
+        
+        # Under maintenance
+        st.warning("Recording feature is under maintenance. Please use the upload option.")
+
+        # Skip the recording part for now
+        #audio_bytes = audio_recorder()
+        #if audio_bytes:
             # Save to file
-            with open("recorded_audio.wav", "wb") as f:
-                f.write(audio_bytes)
+        #    with open("recorded_audio.wav", "wb") as f:
+        #        f.write(audio_bytes)
             
-            st.session_state['audio_file'] = "recorded_audio.wav"
-            st.audio(audio_bytes, format="audio/wav")
-            st.success("Recording saved!")
+        #    st.session_state['audio_file'] = "recorded_audio.wav"
+        #    st.audio(audio_bytes, format="audio/wav")
+        #    st.success("Recording saved!")
   
     # Upload Audio
     elif input_method == "Upload Audio":
+        st.text("Maximum audio length: ~1 sentence (under 15 sec).")
         uploaded_audio = st.file_uploader("Upload a recorded audio:", type=["wav"])
         if uploaded_audio:
             try:
@@ -218,10 +310,7 @@ if selected == "Home":
             result = send_audio_to_api(st.session_state['audio_file'])
         
         if result:
-            # Display the results
-            st.success(f"Accuracy: {result['results']['accuracy']:.2f}, Fluency: {result['results']['fluency']:.2f}, Prosody: {result['results']['prosody']:.2f}")
-            # Display the message
-            st.success("You can refresh the page (F5) to re-evaluate.")
+            clamp_and_feedback(result)
 
 
     # Footer Information
